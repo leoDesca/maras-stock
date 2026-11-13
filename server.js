@@ -6,11 +6,9 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Maras Stock running on port ${PORT}`);
-});
 const DB = path.join(
   process.env.DATA_DIR || path.join(__dirname, 'data'),
   'db.json'
@@ -875,7 +873,7 @@ app.get('/api/export/sales.csv', need('owner'), (q, s) => {
     );
 });
 
-// ---------- start server on Render ----------
+// ---------- start server ----------
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Maras Stock running on port ${PORT}`);
