@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Login</title><link rel="stylesheet" href="/assets/style.css"></head>
+<body><div class="login"><div class="c"><h2 style="margin-top:0;color:var(--ac)">💄 Maras Beauty</h2>
+<label>Username<input id="u" autocomplete="username" autofocus></label><label>Password<input id="p" type="password" autocomplete="current-password"></label>
+<button class="pri" style="width:100%" onclick="go()">Log in</button><p id="e" class="out"></p></div></div><div id="T"></div>
+<script src="/assets/app.js"></script><script>
+$('#p').addEventListener('keydown',e=>e.key=='Enter'&&go());
+async function go(){try{const r=await api('login','POST',{username:$('#u').value,password:$('#p').value});location=r.role=='owner'?'/owner':'/shop'}catch(e){$('#e').textContent=e.message}}
+</script></body></html>

@@ -1,0 +1,39 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shop</title><link rel="stylesheet" href="/assets/style.css"></head>
+<body><header><b id="shop">Shop</b><span id="who"></span><a id="ownerLink" href="/owner" style="display:none">Owner area</a><button onclick="changePassword()">Password</button><button onclick="logout()">Logout</button></header>
+<nav id="nav"></nav><main id="v"></main><div id="M"></div><div id="T"></div>
+<script src="/assets/app.js"></script><script>
+// EMPLOYEE PAGE: sell, see own sales today, count stock. No costs, profit, or settings.
+let V='sell',Q='',items=[],set={low:3,maxDiscount:0};window.CV={};
+const TABS=[['sell','Sell'],['today','My sales today'],['count','Count stock'],['cash','Expenses & cash in']];
+async function init(){const me=await api('me');$('#shop').textContent=me.shop;$('#who').textContent=me.name;if(me.role=='owner')$('#ownerLink').style.display='';set=await api('settings');r()}
+async function r(){const f=document.activeElement,fid=f&&f.id,p=f&&f.selectionStart;
+ $('#nav').innerHTML=TABS.map(([k,n])=>`<button class="${V==k?'on':''}" onclick="V='${k}';Q='';r()">${n}</button>`).join('');
+ items=await api('items');$('#v').innerHTML=await({sell,today,count,cash})[V]();
+ if(fid=='q'){const e=$('#q');e.focus();e.setSelectionRange(p,p)}}
+const match=i=>(lab(i)+i.cat).toLowerCase().includes(Q.toLowerCase());
+const sorted=a=>a.filter(match).sort((a,b)=>a.type.localeCompare(b.type)||a.cat.localeCompare(b.cat)||a.name.localeCompare(b.name)||(parseFloat(a.len)||0)-(parseFloat(b.len)||0));
+const search=()=>`<div class=bar><input id=q placeholder="Search item, colour, length…" value="${esc(Q)}" oninput="Q=this.value;r()"></div>`;
+function sell(){let c='',h=search()+'<div class=w><table><tr><th>Item<th class=n>In stock<th class=n>Price<th></tr>';
+ sorted(items).forEach(i=>{const k=i.type+i.cat;if(k!=c){c=k;h+=`<tr class=h><td colspan=4>${esc(i.cat)}</tr>`}
+  h+=`<tr class="${i.qty<=set.low?'low':''}"><td>${esc(lab(i))}<td class=n><b>${i.qty}</b><td class=n>${i.price?U(i.price):'<small>not set</small>'}<td><button class=pri ${i.qty&&i.price?'':'disabled'} onclick="sellForm('${i.id}')">Sell</button></tr>`});
+ return h+'</table></div>'}
+function sellForm(id){const i=items.find(x=>x.id==id);form('Sell: '+lab(i),[{k:'qty',l:`Quantity (${i.qty} in stock) · price ${U(i.price)} each`,v:1,type:'number'},{k:'discount',l:`Discount in UGX, total (max ${U(set.maxDiscount)} per item)`,v:0,type:'number'}],
+ async v=>{const s=await api('sales','POST',{itemId:id,qty:+v.qty,discount:+v.discount});toast(`Sold ✓ UGX ${U(s.total)}`);r()})}
+async function today(){const s=await api('sales');
+ return `<div class=g><div class="c k"><span>My sales today</span><b>UGX ${U(s.reduce((a,x)=>a+x.total,0))}</b></div><div class="c k"><span>Items sold</span><b>${s.reduce((a,x)=>a+x.qty,0)}</b></div></div><div class=w><table><tr><th>Time<th>Item<th class=n>Qty<th class=n>Total</tr>${s.map(x=>`<tr><td>${new Date(x.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}<td>${esc(x.name)}<td class=n>${x.qty}<td class=n>${U(x.total)}</tr>`).join('')||'<tr><td colspan=4 class=mu>No sales yet today</tr>'}</table></div>`}
+function count(){let h=search()+'<p class=mu>Type what you physically count. Leave blank if it matches. The owner reviews differences before any stock is changed.</p><div class=w><table><tr><th>Item<th class=n>System<th>Counted · diff</tr>';
+ sorted(items).forEach(i=>h+=`<tr><td>${esc(lab(i))}<td class=n>${i.qty}<td><input type=number min=0 class=ci value="${esc(CV[i.id]??'')}" oninput="CV['${i.id}']=this.value;this.nextSibling.textContent=this.value===''?'':' '+(this.value-${i.qty})"><span></span></tr>`);
+ return h+'</table></div><button class=pri onclick="submitCount()">Submit count</button>'}
+async function submitCount(){const lines=Object.entries(CV).map(([itemId,counted])=>({itemId,counted}));const x=await api('counts','POST',{lines});window.CV={};toast(x.differences?`Sent ${x.differences} difference(s) to the owner`:'Everything matches ✓');r()}
+// Staff record shop expenses (money out) and cash coming in that is NOT a sale. Owner reviews them.
+let K='out';
+const CATS={out:['Rent','Electricity','Rubbish / garbage','Water','Transport','Airtime / data','Salary / wages','Stock purchase','Other'],in:['Owner top-up','Loan / borrowed','Refund received','Other income']};
+async function cash(){const e=await api('expenses'),o=e.filter(x=>x.kind=='out').reduce((a,x)=>a+x.amount,0),i=e.filter(x=>x.kind=='in').reduce((a,x)=>a+x.amount,0);
+ return `<div class=c style="max-width:460px"><div class=bar><button class="${K=='out'?'on':''}" onclick="K='out';r()">Money OUT (expense)</button><button class="${K=='in'?'on':''}" onclick="K='in';r()">Money IN (not a sale)</button></div>
+ <div class=md style="padding:0;max-width:none"><label>Category<select id=x_cat style="width:100%;padding:8px">${CATS[K].map(c=>`<option>${c}</option>`).join('')}</select></label>
+ <label>Note (optional)<input id=x_desc placeholder="e.g. March rent, UMEME token"></label><label>Amount (UGX)<input id=x_amt type=number inputmode=numeric></label>
+ <div class=row><button class=pri onclick="saveCash()">Save ${K=='out'?'expense':'cash in'}</button></div></div><small>Sales are recorded automatically — don't enter them here.</small></div>
+ <h4>My entries today · out <span class=out>${U(o)}</span> · in <span class=in>${U(i)}</span></h4><div class=w><table><tr><th>Time<th>Type<th>Details<th class=n>Amount</tr>${e.map(x=>`<tr><td>—<td class="${x.kind=='in'?'in':'out'}">${x.kind=='in'?'IN':'OUT'}<td>${esc(x.cat||'')}${x.desc&&x.desc!=x.cat?' · '+esc(x.desc):''}<td class=n>${U(x.amount)}</tr>`).join('')||'<tr><td colspan=4 class=mu>Nothing recorded today</tr>'}</table></div>`}
+async function saveCash(){const cat=$('#x_cat').value;try{await api('expenses','POST',{kind:K,cat,desc:$('#x_desc').value.trim()||cat,amount:+$('#x_amt').value});toast('Saved ✓');r()}catch(e){toast(e.message)}}
+init();
+</script></body></html>

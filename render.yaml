@@ -1,0 +1,19 @@
+# Render "Blueprint": creates the web service and a persistent disk for your data
+services:
+  - type: web
+    name: maras-stock
+    runtime: node
+    plan: starter            # persistent disks need a paid plan
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATA_DIR
+        value: /var/data
+      - key: OWNER_PASSWORD
+        sync: false          # you type this in Render's dashboard
+      - key: STAFF_PASSWORD
+        sync: false
+    disk:
+      name: maras-data
+      mountPath: /var/data
+      sizeGB: 1

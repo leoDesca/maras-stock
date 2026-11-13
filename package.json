@@ -1,0 +1,8 @@
+{
+  "name": "maras-stock",
+  "version": "1.0.0",
+  "description": "Maras Beauty stock, sales and analytics app",
+  "main": "server.js",
+  "scripts": { "start": "node server.js", "dev": "node --watch server.js" },
+  "dependencies": { "express": "^4.19.2" }
+}

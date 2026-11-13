@@ -1,0 +1,78 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Owner</title><link rel="stylesheet" href="/assets/style.css"></head>
+<body><header><b id="shop">Owner</b><span id="who"></span><a href="/shop">Shop view</a><button onclick="changePassword()">Password</button><button onclick="logout()">Logout</button></header>
+<nav id="nav"></nav><main id="v"></main><div id="M"></div><div id="T"></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script><script src="/assets/app.js"></script><script>
+// OWNER PAGE: analytics, inventory (with cost), sales + voids, cash book, count approvals, staff, settings, audit log.
+let V='dash',Q='',charts=[];
+const TABS=[['dash','Dashboard'],['inv','Inventory'],['sales','Sales'],['cash','Cash book'],['counts','Count reports'],['staff','Staff'],['set','Settings']];
+const PAL=['#b0245a','#e0568a','#7a1d4f','#f2a1c0','#4a2a3d','#d98a5f'];
+async function init(){const me=await api('me');$('#shop').textContent=me.shop+' — Owner';$('#who').textContent=me.name;r()}
+async function r(){const f=document.activeElement,fid=f&&f.id,p=f&&f.selectionStart;
+ $('#nav').innerHTML=TABS.map(([k,n])=>`<button class="${V==k?'on':''}" onclick="V='${k}';Q='';r()">${n}</button>`).join('');
+ charts.forEach(c=>c.destroy());charts=[];
+ $('#v').innerHTML=await({dash,inv,sales,cash,counts,staff,set})[V]();
+ if(V=='dash')drawCharts();
+ if(fid=='q'){const e=$('#q');e.focus();e.setSelectionRange(p,p)}}
+const search=()=>`<input id=q placeholder="Search…" value="${esc(Q)}" oninput="Q=this.value;r()">`;
+const kpi=(l,v,s='')=>`<div class="c k"><span>${l}</span><b>${v}</b><small>${s}</small></div>`;
+
+// ---------- DASHBOARD ----------
+let A,PER='month';
+const PERS=[['today','Today'],['week','7 days'],['month','This month'],['all','All time']];
+function best(){return `<div class=c style="margin:10px 0"><div class=bar style="justify-content:space-between"><h4 style="margin:0;align-self:center">🏆 Best-selling items</h4><span>${PERS.map(([k,n])=>`<button class="${PER==k?'on':''}" onclick="PER='${k}';r()">${n}</button>`).join(' ')}</span></div><div class=w style="border:0"><table><tr><th>#<th>Item<th class=n>Units<th class=n>Revenue<th>Share</tr>${A.top.map((t,i)=>`<tr><td>${i+1}<td>${esc(t.name)}<td class=n><b>${t.qty}</b><td class=n>${U(t.rev)}<td><div style="background:var(--bd);border-radius:6px;width:120px"><div style="background:var(--ac);height:8px;border-radius:6px;width:${Math.round(t.qty/A.top[0].qty*100)}%"></div></div></tr>`).join('')||'<tr><td colspan=5 class=mu>No sales in this period yet</tr>'}</table></div></div>`}
+async function dash(){A=await api('analytics?period='+PER);const k=A.kpi;
+ return `<div class=g>${kpi('Sales today','UGX '+U(k.today),k.todayUnits+' items')}${kpi('Sales this month','UGX '+U(k.month),k.monthUnits+' items')}${kpi('Profit this month','UGX '+U(k.monthProfit),'needs item costs set')}${kpi('Expenses this month','UGX '+U(k.monthExpenses))}${kpi('Cash balance','UGX '+U(k.cash))}${kpi('Stock value','UGX '+U(k.stockValue),k.stockUnits+' units')}</div>
+ ${k.pendingCounts?`<div class=c style="border-color:var(--ac)">⚠ ${k.pendingCounts} stock count report(s) waiting for your review — see “Count reports”.</div>`:''}
+ <div class=cols><div class=c><h4>Revenue — last 14 days</h4><canvas id=c1></canvas></div><div class=c><h4>Sales by category (this month)</h4><canvas id=c2></canvas></div>
+ <div class=c><h4>Expenses by category (this month)</h4><canvas id=c3></canvas></div><div class=c><h4>Sales by staff (this month)</h4><canvas id=c4></canvas></div></div>
+ ${best()}
+ <div class=cols><div class=c><h4>Low / out of stock (${A.low.length})</h4>${A.low.map(i=>`<div>${esc(i.name)} — <b class="${i.qty?'':'out'}">${i.qty}</b></div>`).join('')||'All good ✓'}</div>
+ <div class=c><h4>Slow movers</h4>${A.dead} item line(s) have stock but no sales in 14 days.</div></div>`}
+function drawCharts(){const o={plugins:{legend:{display:false}},maintainAspectRatio:true};
+ const mk=(id,type,labels,data,extra={})=>{const e=$('#'+id);if(e&&labels.length)charts.push(new Chart(e,{type,data:{labels,datasets:[{data,backgroundColor:type=='line'?'#b0245a33':PAL,borderColor:'#b0245a',fill:true,tension:.3,borderRadius:6}]},options:{...o,...extra}}))};
+ mk('c1','line',A.daily.labels,A.daily.rev);
+ mk('c2','doughnut',Object.keys(A.cat),Object.values(A.cat),{plugins:{legend:{display:true,position:'bottom'}}});
+ mk('c3','doughnut',Object.keys(A.expCat),Object.values(A.expCat),{plugins:{legend:{display:true,position:'bottom'}}});
+ mk('c4','bar',Object.keys(A.staff),Object.values(A.staff));}
+
+// ---------- INVENTORY ----------
+async function inv(){const it=await api('items'),s=await api('settings'),L=it.filter(i=>(lab(i)+i.cat).toLowerCase().includes(Q.toLowerCase())).sort((a,b)=>a.type.localeCompare(b.type)||a.cat.localeCompare(b.cat)||a.name.localeCompare(b.name)||(parseFloat(a.len)||0)-(parseFloat(b.len)||0));
+ window.IT=it;let c='',h=`<div class=bar>${search()}<button class=pri onclick="itemForm('lipstick')">+ Lipstick</button><button class=pri onclick="itemForm('wig')">+ Wig / bundle</button></div><div class=w><table><tr><th>Item<th class=n>Qty<th class=n>Cost<th class=n>Price<th class=n>Margin<th></tr>`;
+ L.forEach(i=>{if(i.cat!=c){c=i.cat;h+=`<tr class=h><td colspan=6>${esc(c)}</tr>`}
+  h+=`<tr class="${i.qty<=s.low?'low':''}"><td>${esc(lab(i))}<td class=n><b>${i.qty}</b><td class=n>${U(i.cost)}<td class=n>${U(i.price)}<td class=n>${i.cost&&i.price?Math.round((i.price-i.cost)/i.price*100)+'%':'–'}<td><button onclick="restock('${i.id}')">+Stock</button> <button onclick="itemForm('${i.type}','${i.id}')">Edit</button></tr>`});
+ return h+'</table></div>'}
+function itemForm(type,id){const i=id?IT.find(x=>x.id==id):{name:'',cat:type=='wig'?'Wig':'Matte & Gloss',color:'',len:'',qty:0,price:type=='wig'?0:25000,cost:0};
+ form(id?'Edit '+lab(i):'New '+type,[{k:'name',l:'Name / style',v:i.name},{k:'cat',l:'Category',v:i.cat},...(type=='wig'?[{k:'color',l:'Colour',v:i.color},{k:'len',l:'Length (inches)',v:i.len}]:[]),{k:'qty',l:'Quantity',v:i.qty,type:'number'},{k:'cost',l:'Cost price (UGX, staff never see this)',v:i.cost,type:'number'},{k:'price',l:'Selling price (UGX)',v:i.price,type:'number'}],
+ async v=>{id?await api('items/'+id,'PUT',v):await api('items','POST',{...v,type});r()},id?async()=>{await api('items/'+id,'DELETE');r()}:null)}
+function restock(id){const i=IT.find(x=>x.id==id);form('Add stock: '+lab(i),[{k:'qty',l:'Quantity received',v:1,type:'number'},{k:'cost',l:'Total paid (optional → recorded as cash out)',v:0,type:'number'}],async v=>{await api(`items/${id}/restock`,'POST',v);r()})}
+
+// ---------- SALES ----------
+async function sales(){const s=(await api('sales')).filter(x=>(x.name+x.by).toLowerCase().includes(Q.toLowerCase()));
+ return `<div class=bar>${search()}<a href="/api/export/sales.csv"><button>⬇ Export CSV</button></a></div><div class=w><table><tr><th>Date<th>Item<th class=n>Qty<th class=n>Discount<th class=n>Total<th>By<th></tr>${s.map(x=>`<tr style="${x.void?'opacity:.45;text-decoration:line-through':''}"><td>${x.date}<td>${esc(x.name)}<td class=n>${x.qty}<td class=n>${U(x.discount)}<td class=n>${U(x.total)}<td>${esc(x.by)}<td>${x.void?'voided':`<button class=bad onclick="voidSale('${x.id}')">Void</button>`}</tr>`).join('')}</table></div>`}
+async function voidSale(id){form('Void this sale? Stock is returned.',[],async()=>{await api(`sales/${id}/void`,'POST');r()})}
+
+// ---------- CASH BOOK ----------
+async function cash(){const e=await api('expenses'),k=(await api('analytics')).kpi;
+ return `<div class=g>${kpi('Cash balance','UGX '+U(k.cash),'opening + sales + cash in − cash out')}</div><div class=bar><button class=pri onclick="cashForm('out')">+ Cash out (expense)</button><button onclick="cashForm('in')">+ Cash in (not a sale)</button></div><div class=w><table><tr><th>Date<th>Category<th>Description<th>By<th class=n>In<th class=n>Out<th></tr>${e.map(x=>`<tr><td>${x.date}<td>${esc(x.cat||'')}<td>${esc(x.desc)}<td>${esc(x.by||'')}<td class="n in">${x.kind=='in'?U(x.amount):''}<td class="n out">${x.kind=='out'?U(x.amount):''}<td><button class=bad onclick="delCash('${x.id}')">×</button></tr>`).join('')||'<tr><td colspan=7 class=mu>No entries yet. Sales are added automatically.</tr>'}</table></div>`}
+const cashForm=kind=>form(kind=='out'?'Expense':'Cash in',[{k:'cat',l:'Category (Rent, Electricity, Rubbish…)',v:kind=='out'?'Other':'Other income'},{k:'desc',l:'Description',v:''},{k:'amount',l:'Amount (UGX)',v:'',type:'number'},{k:'date',l:'Date',v:new Date().toLocaleDateString('en-CA'),type:'date'}],async v=>{await api('expenses','POST',{...v,desc:v.desc||v.cat,kind});r()});
+const delCash=id=>form('Delete this entry?',[],async()=>{await api('expenses/'+id,'DELETE');r()});
+
+// ---------- COUNT REPORTS ----------
+async function counts(){const c=await api('counts');
+ return c.map(x=>`<div class=c style="margin:8px 0"><b>${x.date} · by ${esc(x.by)}</b> <small>(${x.status})</small>${x.lines.map(l=>`<div>${esc(l.name)}: system ${l.system} → counted <b>${l.counted}</b> <span class="${l.counted<l.system?'out':'in'}">(${l.counted-l.system>0?'+':''}${l.counted-l.system})</span></div>`).join('')||'<div class=mu>No differences</div>'}${x.status=='pending'?`<div class=bar><button class=pri onclick="cnt('${x.id}','apply')">Apply to stock</button><button onclick="cnt('${x.id}','dismiss')">Dismiss</button></div>`:''}</div>`).join('')||'<p class=mu>No count reports yet.</p>'}
+const cnt=async(id,a)=>{await api(`counts/${id}/${a}`,'POST');r()};
+
+// ---------- STAFF ----------
+async function staff(){const u=await api('users'),log=await api('log');
+ return `<div class=bar><button class=pri onclick="userForm()">+ Add user</button></div><div class=w><table><tr><th>Name<th>Username<th>Role<th>Status<th></tr>${u.map(x=>`<tr><td>${esc(x.name)}<td>${esc(x.username)}<td>${x.role}<td>${x.active?'active':'disabled'}<td><button onclick="resetPw('${x.id}')">Reset password</button> <button onclick="toggleUser('${x.id}',${!x.active})">${x.active?'Disable':'Enable'}</button></tr>`).join('')}</table></div>
+ <h4>Activity log (latest 100)</h4><div class=w><table>${log.map(l=>`<tr><td>${new Date(l.ts).toLocaleString()}<td>${esc(l.by)}<td>${esc(l.action)}<td class=mu>${esc(l.detail)}</tr>`).join('')}</table></div>`}
+const userForm=()=>form('New user',[{k:'name',l:'Full name',v:''},{k:'username',l:'Username',v:''},{k:'password',l:'Password (6+)',v:'',type:'password'},{k:'role',l:'Role: staff or owner',v:'staff'}],async v=>{await api('users','POST',v);r()});
+const resetPw=id=>form('Reset password',[{k:'password',l:'New password (6+)',v:'',type:'password'}],async v=>{await api('users/'+id,'PUT',v);toast('Password reset')});
+const toggleUser=async(id,active)=>{try{await api('users/'+id,'PUT',{active});r()}catch(e){toast(e.message)}};
+
+// ---------- SETTINGS ----------
+async function set(){const s=await api('settings');
+ return `<div class=c style="max-width:420px"><h4>Shop settings</h4><div class=md style="padding:0;max-width:none"><label>Shop name<input id=s_shop value="${esc(s.shop)}"></label><label>Low-stock alert at or below<input id=s_low type=number value=${s.low}></label><label>Max discount staff can give (UGX per item)<input id=s_md type=number value=${s.maxDiscount}></label><label>Opening cash balance (UGX)<input id=s_open type=number value=${s.open}></label><div class=row><button class=pri onclick="saveSet()">Save settings</button></div></div></div><div class=c style="max-width:420px;margin-top:10px"><h4>Backup</h4><p class=mu>Download all your data (stock, sales, users). Do this weekly and keep the file somewhere safe.</p><a href="/api/backup"><button class=pri>⬇ Download backup</button></a></div>`}
+async function saveSet(){await api('settings','PUT',{shop:$('#s_shop').value,low:$('#s_low').value,maxDiscount:$('#s_md').value,open:$('#s_open').value});toast('Saved');init()}
+init();
+</script></body></html>
