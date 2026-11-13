@@ -6,8 +6,11 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const PORT = process.env.PORT || 3000;
 
-const PORT = process.env.PORT || 10000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Maras Stock running on port ${PORT}`);
+});
 const DB = path.join(
   process.env.DATA_DIR || path.join(__dirname, 'data'),
   'db.json'
